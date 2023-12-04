@@ -11,8 +11,10 @@ fun main(args: Array<String>): Unit =
 fun Application.module() {
     configureDI()
     configureDatabase()
-    configureSockets()
     configureSecurity()
+    configureSockets()
     configureSerialization()
     configureRouting()
+//    configureReteLimit()
+//    configureCachingHeaders()
 }

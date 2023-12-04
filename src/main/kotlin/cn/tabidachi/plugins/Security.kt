@@ -32,6 +32,9 @@ fun Application.configureSecurity() {
                 val user = userDao.findById(uid)
                 if (user != null) UserPrincipal(uid) else null
             }
+            challenge { defaultScheme: String, realm: String ->
+
+            }
         }
     }
 }

@@ -1,14 +1,15 @@
 package cn.tabidachi.di
 
-import cn.tabidachi.database.dao.UserDao
-import cn.tabidachi.database.dao.impl.UserDaoImpl
+import cn.tabidachi.WebSocketClient
+import cn.tabidachi.database.dao.*
+import cn.tabidachi.database.dao.impl.*
 import cn.tabidachi.security.access.AccessControl
 import cn.tabidachi.security.code.SecurityCode
 import cn.tabidachi.security.code.Verifiable
 import cn.tabidachi.security.jwt.ElectroJWT
 import cn.tabidachi.security.jwt.SimpleJWT
-import cn.tabidachi.service.AuthService
-import cn.tabidachi.service.impl.AuthServiceImpl
+import cn.tabidachi.service.*
+import cn.tabidachi.service.impl.*
 import cn.tabidachi.system.ElectroEmail
 import cn.tabidachi.system.PropertyPath
 import org.koin.dsl.module
@@ -17,12 +18,42 @@ import java.time.Duration
 object KoinModule {
     private val dao = module {
         single<UserDao> {
-            UserDaoImpl()
+            UserDaoImpl(get())
+        }
+        single<ChatDao> {
+            ChatDaoImpl()
+        }
+        single<SessionUserDao> {
+            SessionUserDaoImpl()
+        }
+        single<MessageDao> {
+            MessageDaoImpl()
+        }
+        single<RelationDao> {
+            RelationDaoImpl()
+        }
+        single<DeviceDao> {
+            DeviceDaoImpl()
         }
     }
     private val service = module {
         single<AuthService> {
             AuthServiceImpl(get(), get(), get())
+        }
+        single<UserService> {
+            UserServiceImpl(get())
+        }
+        single<ChatService> {
+            ChatServiceImpl(get(), get(), get(), get(), get())
+        }
+        single<ChatUserService> {
+            ChatUserServiceImpl(get())
+        }
+        single<MessageService> {
+            MessageServiceImpl(get())
+        }
+        single<ChatsService> {
+            ChatsServiceImpl(get(), get(), get(), get())
         }
     }
     private val security = module {
@@ -44,9 +75,13 @@ object KoinModule {
         single {
             ElectroEmail(
                 getProperty(PropertyPath.Smtp.HOST),
+                getProperty(PropertyPath.Smtp.PORT),
                 getProperty(PropertyPath.Smtp.USERNAME),
                 getProperty(PropertyPath.Smtp.PASSWORD),
             )
+        }
+        single {
+            WebSocketClient(get(), get(), get())
         }
     }
     val all = module {

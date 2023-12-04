@@ -1,6 +1,6 @@
 package cn.tabidachi.database
 
-import cn.tabidachi.database.table.UserTable
+import cn.tabidachi.database.table.*
 import cn.tabidachi.system.PropertyPath
 import io.ktor.server.application.*
 import org.jetbrains.exposed.sql.Database
@@ -21,12 +21,25 @@ fun Application.configureDatabase() {
         user = property(PropertyPath.Database.USER).getString()
         password = property(PropertyPath.Database.PASSWORD).getString()
     }
-    val tables = arrayOf(UserTable)
-    Database.connect(url, driver, user, password)
-    transaction {
-        SchemaUtils.createSchema(Schema(name))
-        SchemaUtils.setSchema(Schema(name))
-        SchemaUtils.createMissingTablesAndColumns(*tables)
+    val tables = arrayOf(
+        UserTable,
+        SessionTable,
+        SessionUserTable,
+        MessageTable,
+        RelationTable,
+        DeviceTable,
+        GroupRoleTable,
+        ChannelRoleTable
+    )
+    kotlin.runCatching {
+        Database.connect(url, driver, user, password)
+        transaction {
+            SchemaUtils.createSchema(Schema(name))
+            SchemaUtils.setSchema(Schema(name))
+            SchemaUtils.createMissingTablesAndColumns(*tables)
+        }
+        Database.connect("$url/$name", driver, user, password)
+    }.onFailure {
+        it.printStackTrace()
     }
-    Database.connect("$url/$name", driver, user, password)
 }

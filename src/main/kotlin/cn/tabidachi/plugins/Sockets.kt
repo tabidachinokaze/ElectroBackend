@@ -1,6 +1,10 @@
 package cn.tabidachi.plugins
 
+import cn.tabidachi.WebSocketClient
+import cn.tabidachi.model.WebSocketMessage
+import cn.tabidachi.security.jwt.UserPrincipal
 import io.ktor.server.application.*
+import io.ktor.server.auth.*
 import io.ktor.server.routing.*
 import io.ktor.server.websocket.*
 import io.ktor.websocket.*
@@ -8,6 +12,9 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
+import org.koin.ktor.ext.inject
 import java.time.Duration
 import java.util.*
 
@@ -29,6 +36,7 @@ fun Application.configureSockets() {
                         is Frame.Text -> {
                             SessionManager.onMessage(sessionId, frame.readText())
                         }
+
                         else -> Unit
                     }
                 }
@@ -40,6 +48,56 @@ fun Application.configureSockets() {
             } catch (e: Throwable) {
                 println("onClose $sessionId $e")
                 SessionManager.onSessionClose(sessionId)
+            }
+        }
+    }
+    val client: WebSocketClient by inject()
+    routing {
+        authenticate {
+            webSocketRaw("/") {
+                val uid = when (val principal = call.principal<UserPrincipal>()) {
+                    null -> {
+                        this.close(
+                            CloseReason(
+                                CloseReason.Codes.CANNOT_ACCEPT, "未验证身份"
+                            )
+                        )
+                        return@webSocketRaw
+                    }
+
+                    else -> {
+                        principal.userId
+                    }
+                }
+                client.online(uid, this)
+
+                for (frame in incoming) {
+                    when (frame) {
+                        is Frame.Text -> {
+                            kotlin.runCatching {
+                                Json.decodeFromString<WebSocketMessage>(frame.readText())
+                            }.onSuccess {
+                                client.onMessage(uid, it, this)
+                            }.onFailure {
+                                println("unsupported message: ${frame.readText()}")
+                                it.printStackTrace()
+                            }
+                        }
+
+                        is Frame.Ping -> {
+                            kotlin.runCatching {
+                                send(Frame.Pong(frame.data))
+                            }.onFailure {
+                                it.printStackTrace()
+                            }
+                        }
+
+                        else -> {
+
+                        }
+                    }
+                }
+                client.offline(uid, this)
             }
         }
     }
@@ -72,16 +130,16 @@ object SessionManager {
 
     fun onMessage(sessionId: UUID, message: String) {
         when {
-            message.startsWith(MessageType.STATE.toString(), true) -> handleState(sessionId)
-            message.startsWith(MessageType.OFFER.toString(), true) -> handleOffer(sessionId, message)
-            message.startsWith(MessageType.ANSWER.toString(), true) -> handleAnswer(sessionId, message)
-            message.startsWith(MessageType.ICE.toString(), true) -> handleIce(sessionId, message)
+            message.startsWith(SignalingCommand.STATE.toString(), true) -> handleState(sessionId)
+            message.startsWith(SignalingCommand.OFFER.toString(), true) -> handleOffer(sessionId, message)
+            message.startsWith(SignalingCommand.ANSWER.toString(), true) -> handleAnswer(sessionId, message)
+            message.startsWith(SignalingCommand.ICE.toString(), true) -> handleIce(sessionId, message)
         }
     }
 
     private fun handleState(sessionId: UUID) {
         sessionManagerScope.launch {
-            clients[sessionId]?.send("${MessageType.STATE} $sessionState")
+            clients[sessionId]?.send("${SignalingCommand.STATE} $sessionState")
         }
     }
 
@@ -125,7 +183,7 @@ object SessionManager {
 
     private fun notifyAboutStateUpdate() {
         clients.forEach { (_, client) ->
-            client.send("${MessageType.STATE} $sessionState")
+            client.send("${SignalingCommand.STATE} $sessionState")
         }
     }
 
@@ -134,15 +192,12 @@ object SessionManager {
             this@send.send(Frame.Text(message))
         }
     }
+}
 
-    enum class WebRTCSessionState {
-        Active,
-        Creating,
-        Ready,
-        Impossible
-    }
+enum class WebRTCSessionState {
+    Active, Creating, Ready, Impossible
+}
 
-    enum class MessageType {
-        STATE, OFFER, ANSWER, ICE
-    }
+enum class SignalingCommand {
+    STATE, OFFER, ANSWER, ICE
 }
