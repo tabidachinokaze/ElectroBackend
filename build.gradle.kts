@@ -5,7 +5,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
-group = "cn.tabidachi"
+group = "moe.tabidachi"
 version = "0.0.2"
 application {
     mainClass.set("io.ktor.server.netty.EngineMain")
